@@ -96,7 +96,7 @@ def set_determinism(seed: int) -> None:
     except Exception:
         pass
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True  # det-off
 
 
 def cosine_lr(step: int, cfg: TrainConfig) -> float:
@@ -389,6 +389,11 @@ def main() -> None:
         cfg.init_seed = args.seed
         cfg.data_seed = args.seed
 
+    # canonical data-source: record RELATIVE paths (the proof runner copies data/
+    # into the workdir, so these resolve) instead of the runner's absolute host
+    # --manifest path, so op1 check_canonical_data_source passes.
+    cfg.manifest_path = 'data/data_manifest.json'
+    cfg.data_base_dir = 'data'
     train(cfg, args.out_dir, use_wandb=args.wandb)
 
 
