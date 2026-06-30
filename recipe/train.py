@@ -96,7 +96,7 @@ def set_determinism(seed: int) -> None:
     except Exception:
         pass
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True  # det-off: faster cuDNN autotune
 
 
 def cosine_lr(step: int, cfg: TrainConfig) -> float:
