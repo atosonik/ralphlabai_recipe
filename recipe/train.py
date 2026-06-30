@@ -393,6 +393,8 @@ def main() -> None:
         cfg.init_seed = args.seed
         cfg.data_seed = args.seed
 
+    cfg.manifest_path = 'data/data_manifest.json'
+    cfg.data_base_dir = 'data'
     train(cfg, args.out_dir, use_wandb=args.wandb)
 
 
