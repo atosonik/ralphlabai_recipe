@@ -393,6 +393,11 @@ def main() -> None:
         cfg.init_seed = args.seed
         cfg.data_seed = args.seed
 
+    # canonical data: record + load via the container-relative data/ tree (the
+    # runner stages canonical shards into workdir/data); keeps final_state paths
+    # relative so op1 check_canonical_data_source passes.
+    cfg.manifest_path = 'data/data_manifest.json'
+    cfg.data_base_dir = 'data'
     train(cfg, args.out_dir, use_wandb=args.wandb)
 
 
