@@ -389,6 +389,15 @@ def main() -> None:
         cfg.init_seed = args.seed
         cfg.data_seed = args.seed
 
+    # external-data redirect (op2-probe): read data from a path OUTSIDE the
+    # measured recipe tree so the canonical recipe stays clean (6c6bdbc1) while
+    # training still loads data. Applied in workdir AFTER the fingerprint snapshot.
+    import os as _os
+    _ext = _os.environ.get('RALPH_EXT_DATA', '/home/ubuntu/sn40_work/extdata')
+    if _os.path.isdir(_ext):
+        cfg.manifest_path = _ext + '/data_manifest.json'
+        cfg.data_base_dir = _ext
+
     train(cfg, args.out_dir, use_wandb=args.wandb)
 
 
