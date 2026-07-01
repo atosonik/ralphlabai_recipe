@@ -64,6 +64,15 @@ class TrainConfig:
     muon_momentum: float = 0.95
     muon_ns_steps: int = 5
 
+    # Embedding treatment. Untie the LM head from the input embedding and run
+    # the embedding/head AdamW group at embed_lr_mult x the base LR. Modern
+    # speedruns (modded-nanoGPT) find untied embeddings with a much higher
+    # embedding LR improve loss: the embedding table is sparsely updated, so a
+    # larger step is well-conditioned, and an untied head decouples input and
+    # output representations. Single axis vs the king (which ties + uses 1x LR).
+    tie_embeddings: bool = False
+    embed_lr_mult: float = 10.0
+
     # Data + reproducibility
     manifest_path: str = "data/data_manifest.json"
     data_base_dir: str = "data"
@@ -130,6 +139,7 @@ def build_model(cfg: TrainConfig) -> RalphBase:
         head_dim=cfg.head_dim,
         ffn_mult=cfg.ffn_mult,
         max_seq_len=cfg.max_seq_len,
+        tie_embeddings=cfg.tie_embeddings,
     ))
 
 
@@ -193,17 +203,21 @@ def build_optimizer(model: torch.nn.Module, cfg: TrainConfig) -> list[torch.opti
             else:
                 norm_params.append(p)
         muon = Muon(muon_params, lr=cfg.muon_lr, momentum=cfg.muon_momentum, ns_steps=cfg.muon_ns_steps)
+        embed_lr = cfg.max_lr * cfg.embed_lr_mult
         adamw = torch.optim.AdamW(
             [
-                {"params": embed_params, "weight_decay": cfg.weight_decay},
-                {"params": norm_params, "weight_decay": 0.0},
+                {"params": embed_params, "weight_decay": cfg.weight_decay, "lr": embed_lr},
+                {"params": norm_params, "weight_decay": 0.0, "lr": cfg.max_lr},
             ],
             lr=cfg.max_lr,
             betas=(cfg.beta1, cfg.beta2),
         )
-        for opt, base in ((muon, cfg.muon_lr), (adamw, cfg.max_lr)):
-            for grp in opt.param_groups:
-                grp["base_lr"] = base
+        for grp in muon.param_groups:
+            grp["base_lr"] = cfg.muon_lr
+        # Preserve each AdamW group's own LR as its base_lr so the embedding
+        # group keeps its embed_lr_mult scaling under the (warmup+cosine) frac.
+        for grp in adamw.param_groups:
+            grp["base_lr"] = grp["lr"]
         return [muon, adamw]
 
     decay_params = [p for n, p in model.named_parameters() if p.requires_grad and p.dim() >= 2]
@@ -418,6 +432,12 @@ def main() -> None:
         cfg.init_seed = args.seed
         cfg.data_seed = args.seed
 
+    # Canonical-data-source (op1): the runner injects an absolute realpath for
+    # --manifest/--data-base-dir, but final_state must record a container-relative
+    # path or check_canonical_data_source rejects it. The workdir cwd already holds
+    # data/, so the relative path resolves for loading too.
+    cfg.manifest_path = "data/data_manifest.json"
+    cfg.data_base_dir = "data"
     train(cfg, args.out_dir, use_wandb=args.wandb)
 
 
